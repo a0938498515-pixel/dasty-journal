@@ -9,7 +9,7 @@
 //|  проекта Supabase (тот же, что в параметре InpUrl).              |
 //+------------------------------------------------------------------+
 #property copyright "Dasty Journal"
-#property version   "1.10"
+#property version   "1.20"
 #property description "Синхронизация закрытых сделок MT5 с Dasty Journal"
 
 input string   InpUrl      = "";                   // Адрес проекта Supabase (https://xxxx.supabase.co)
@@ -50,7 +50,7 @@ int OnInit()
       Alert("DastySync не работает в тестере стратегий — запустите его на обычном графике.");
       return(INIT_FAILED);
      }
-   g_file = "DastySync_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".txt";
+   g_file = "DastySync2_" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)) + ".txt";   // v1.2: новый файл — сделки отправятся заново со свечами M15–W1
    LoadSent();
    EventSetTimer(MathMax(15, InpInterval));
    Sync();
@@ -319,22 +319,22 @@ int BuildPosition(long pid, string &js, bool force = false)
   }
 
 //+------------------------------------------------------------------+
-//| Свечи вокруг сделки: 40 свечей до входа и 20 после выхода        |
+//| Свечи вокруг сделки: 100 свечей до входа и 50 после выхода       |
 //+------------------------------------------------------------------+
 string BarsJson(string sym, datetime ot, datetime ct, int digits, long off, int &missing)
   {
-   ENUM_TIMEFRAMES tfs[5] = {PERIOD_M1, PERIOD_M5, PERIOD_M15, PERIOD_H1, PERIOD_H4};
-   string names[5] = {"M1", "M5", "M15", "H1", "H4"};
+   ENUM_TIMEFRAMES tfs[6] = {PERIOD_M15, PERIOD_M30, PERIOD_H1, PERIOD_H4, PERIOD_D1, PERIOD_W1};
+   string names[6] = {"M15", "M30", "H1", "H4", "D1", "W1"};
    string out = "{";
    bool first = true;
    missing = 0;
-   for(int k = 0; k < 5; k++)
+   for(int k = 0; k < 6; k++)
      {
       int ps = PeriodSeconds(tfs[k]);
       if((ct - ot) / ps > 300)
          continue;                       // слишком длинная сделка для этого таймфрейма
       MqlRates r[];
-      int got = CopyRates(sym, tfs[k], ot - 40 * ps, ct + 20 * ps, r);
+      int got = CopyRates(sym, tfs[k], ot - 100 * ps, ct + 50 * ps, r);
       if(got < 3)
         {
          missing++;
@@ -368,7 +368,7 @@ bool Send(string items)
                 + ",\"currency\":\"" + Esc(AccountInfoString(ACCOUNT_CURRENCY)) + "\""
                 + ",\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2)
                 + ",\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2)
-                + ",\"ea\":\"1.10\"}";
+                + ",\"ea\":\"1.20\"}";
    string body = "{\"p_token\":\"" + Esc(InpToken) + "\",\"p_account\":" + acc + ",\"p_trades\":[" + items + "]}";
    string headers = "Content-Type: application/json\r\napikey: " + InpKey + "\r\n";
    char data[], res[];
