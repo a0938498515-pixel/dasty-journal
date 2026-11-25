@@ -9,7 +9,7 @@
 //|  проекта Supabase (тот же, что в параметре InpUrl).              |
 //+------------------------------------------------------------------+
 #property copyright "Dasty Journal"
-#property version   "1.20"
+#property version   "1.30"
 #property description "Синхронизация закрытых сделок MT5 с Dasty Journal"
 
 input string   InpUrl      = "";                   // Адрес проекта Supabase (https://xxxx.supabase.co)
@@ -30,6 +30,8 @@ datetime g_last   = 0;      // последняя удачная связь
 datetime g_beat   = 0;      // последняя отправка данных счёта
 int      g_total  = 0;      // отправлено за сеанс
 string   g_status = "запуск…";
+string   g_lastOpen = "";   // последний отправленный список открытых позиций
+int      g_openCnt = 0;
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -100,6 +102,8 @@ void Sync()
       return;
      }
 
+   string op = OpenJson();
+
 // 1. Собираем ID позиций, у которых есть сделки закрытия
    long ids[];
    int  n = 0;
@@ -142,7 +146,7 @@ void Sync()
       bIds[bn++] = ids[i];
       if(bn >= BATCH)
         {
-         if(!Send(batch))
+         if(!Send(batch, op))
             return;
          MarkSent(bIds, bn);
          sentNow += bn;
@@ -153,15 +157,16 @@ void Sync()
      }
    if(bn > 0)
      {
-      if(!Send(batch))
+      if(!Send(batch, op))
          return;
       MarkSent(bIds, bn);
       sentNow += bn;
      }
 
-// 3. Раз в 10 минут обновляем баланс счёта в журнале, даже без новых сделок
-   if(sentNow == 0 && TimeCurrent() - g_beat >= 600)
-      if(!Send(""))
+// 3. Открытые позиции — каждую проверку, пока они есть (и один раз, когда все закрыты);
+//    без открытых позиций — раз в 10 минут обновляем баланс счёта
+   if(sentNow == 0 && (op != "[]" || op != g_lastOpen || TimeCurrent() - g_beat >= 600))
+      if(!Send("", op))
          return;
 
    g_total += sentNow;
@@ -360,7 +365,7 @@ string BarsJson(string sym, datetime ot, datetime ct, int digits, long off, int 
 //+------------------------------------------------------------------+
 //| Отправка в Supabase (функция mt5_push)                           |
 //+------------------------------------------------------------------+
-bool Send(string items)
+bool Send(string items, string open)
   {
    string acc = "{\"login\":" + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN))
                 + ",\"server\":\"" + Esc(AccountInfoString(ACCOUNT_SERVER)) + "\""
@@ -368,8 +373,8 @@ bool Send(string items)
                 + ",\"currency\":\"" + Esc(AccountInfoString(ACCOUNT_CURRENCY)) + "\""
                 + ",\"balance\":" + DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE), 2)
                 + ",\"equity\":" + DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY), 2)
-                + ",\"ea\":\"1.20\"}";
-   string body = "{\"p_token\":\"" + Esc(InpToken) + "\",\"p_account\":" + acc + ",\"p_trades\":[" + items + "]}";
+                + ",\"ea\":\"1.30\"}";
+   string body = "{\"p_token\":\"" + Esc(InpToken) + "\",\"p_account\":" + acc + ",\"p_trades\":[" + items + "],\"p_open\":" + open + "}";
    string headers = "Content-Type: application/json\r\napikey: " + InpKey + "\r\n";
    char data[], res[];
    string rh;
@@ -398,7 +403,45 @@ bool Send(string items)
      }
    g_last = TimeLocal();
    g_beat = TimeCurrent();
+   g_lastOpen = open;
    return true;
+  }
+
+//+------------------------------------------------------------------+
+//| Список открытых позиций (JSON)                                   |
+//+------------------------------------------------------------------+
+string OpenJson()
+  {
+   long off = ServerOffset();
+   string a = "";
+   int n = PositionsTotal();
+   g_openCnt = 0;
+   for(int i = 0; i < n && i < 200; i++)
+     {
+      ulong tk = PositionGetTicket(i);
+      if(tk == 0)
+         continue;
+      string sym = PositionGetString(POSITION_SYMBOL);
+      int dg = (int)SymbolInfoInteger(sym, SYMBOL_DIGITS);
+      if(dg <= 0)
+         dg = 5;
+      string side = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? "buy" : "sell";
+      a += (a == "" ? "" : ",");
+      a += "{\"pos\":" + IntegerToString(PositionGetInteger(POSITION_IDENTIFIER))
+           + ",\"sym\":\"" + Esc(sym) + "\""
+           + ",\"type\":\"" + side + "\""
+           + ",\"vol\":" + DoubleToString(PositionGetDouble(POSITION_VOLUME), 2)
+           + ",\"ot\":" + IntegerToString((long)PositionGetInteger(POSITION_TIME) - off)
+           + ",\"op\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN), dg)
+           + ",\"cp\":" + DoubleToString(PositionGetDouble(POSITION_PRICE_CURRENT), dg)
+           + ",\"sl\":" + DoubleToString(PositionGetDouble(POSITION_SL), dg)
+           + ",\"tp\":" + DoubleToString(PositionGetDouble(POSITION_TP), dg)
+           + ",\"swap\":" + DoubleToString(PositionGetDouble(POSITION_SWAP), 2)
+           + ",\"profit\":" + DoubleToString(PositionGetDouble(POSITION_PROFIT), 2)
+           + ",\"digits\":" + IntegerToString(dg) + "}";
+      g_openCnt++;
+     }
+   return "[" + a + "]";
   }
 
 //+------------------------------------------------------------------+
@@ -488,7 +531,7 @@ void Show(string s)
    g_status = s;
    Comment("DastySync · счёт ", AccountInfoInteger(ACCOUNT_LOGIN), "\n",
            "Статус: ", g_status, "\n",
-           "Отправлено за сеанс: ", g_total, " · всего: ", ArraySize(g_sent), "\n",
+           "Отправлено за сеанс: ", g_total, " · всего: ", ArraySize(g_sent), " · открытых позиций: ", g_openCnt, "\n",
            "Последняя связь: ", (g_last > 0 ? TimeToString(g_last, TIME_DATE | TIME_MINUTES) : "—"));
   }
 //+------------------------------------------------------------------+
