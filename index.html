@@ -986,9 +986,9 @@ const mid=(lo0+hi0)/2+ys.o,half=(hi0-lo0)/2/ys.k,lo=mid-half,hi=mid+half,Y=v=>pt
 nice(lo,hi,7).forEach(v=>{if(v<lo||v>hi)return;const y=Math.round(Y(v))+.5;g+=`<line x1="0" x2="${iw}" y1="${y}" y2="${y}" class="cg"/><text x="${W-6}" y="${y+4}" class="ct" text-anchor="end">${v.toFixed(dg)}</text>`});
 const step=Math.max(1,Math.round(110/bw));for(let i=a;i<=b;i++)if((i-a)%step==0&&X(i)>30&&X(i)<iw-30)g+=`<line x1="${X(i)}" x2="${X(i)}" y1="${pt}" y2="${pt+ih}" class="cg"/><text x="${X(i)}" y="${H-7}" class="ct" text-anchor="middle">${tcFmtT(tcTime(i))}</text>`;
 // trade band (gray), SL / TP dashed lines
-let gp='';const x0=Math.max(0,X(C.ei)-bw/2),x1=Math.min(iw,X(C.xi)+bw/2);if(x1>0&&x0<iw)gp+=`<rect x="${x0.toFixed(1)}" y="${pt}" width="${(x1-x0).toFixed(1)}" height="${ih}" class="tband"/>`;
+let gp='';const x0=Math.max(0,X(C.ei)-bw/2),x1=Math.min(iw,X(C.xi)+bw/2);const bl=[t.en,hasSt?t.st:t.en,hasTp?t.tp:t.ex],yT=Y(Math.max(...bl)),yB=Y(Math.min(...bl));if(x1>0&&x0<iw)gp+=`<rect x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1-x0).toFixed(1)}" height="${Math.max(1,yB-yT).toFixed(1)}" class="tband"/>`;
 const lvl=(v,lb)=>{const y=Math.round(Y(v))+.5;if(y<pt||y>pt+ih)return'';const xe=Math.min(iw-4,x1+Math.max(40,bw*3));return`<line x1="${x0.toFixed(1)}" x2="${xe.toFixed(1)}" y1="${y}" y2="${y}" class="tlvl"/><text x="${(xe+6).toFixed(1)}" y="${y+4}" class="tlbl">${lb}</text>`};
-if(hasSt)gp+=lvl(t.st,'SL');if(hasTp)gp+=lvl(t.tp,'TP');
+gp+=lvl(t.en,'Вход');if(hasSt)gp+=lvl(t.st,'SL');if(hasTp)gp+=lvl(t.tp,'TP');
 // candles (crisp)
 for(let i=a;i<=b;i++){const q=k[i],up=q.c>=q.o,x=X(i),yo=Y(q.o),yc=Y(q.c),col=up?CU:CDn,top=Math.round(Math.min(yo,yc)),h=Math.max(1,Math.round(Math.abs(yo-yc)));gp+=`<line x1="${x}" x2="${x}" y1="${Math.round(Y(q.h))}" y2="${Math.round(Y(q.l))}" stroke="${col}" shape-rendering="crispEdges"/><rect x="${Math.round(x-cw/2)}" y="${top}" width="${cw}" height="${h}" fill="${col}" shape-rendering="crispEdges"/>`}
 // entry → exit path and arrows
